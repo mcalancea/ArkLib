@@ -264,17 +264,20 @@ variable [Finite R]
 
 open Fintype
 
-def projection (S : Set n) (w : n → R) [Fintype S]: S → R :=
+def projection (S : Finset n) (w : n → R) : S → R :=
   fun i => w i.val
 
-def projection2 (pred: n → Prop) (w : n → R) : {i : n | pred i} → R :=
-  fun i => w i.val
 
-theorem projection_injective (C : Set (n → R)) (S : Set n) [Fintype S]
-    (hS : card S = card n - (‖C‖₀ - 1)) :
-     Function.Injective (α := (n → R)) (β := (S → R)) (fun c => projection S c) := by
+theorem projection_injective
+    (C : Set (n → R))
+    (nontriv: ‖C‖₀ ≥ 1)
+    (S : Finset n)
+    (hS : card S = card n - (‖C‖₀ - 1))
+    {u v : n → R}
+    (hu : u ∈ C)
+    (hv : v ∈ C) : projection S u = projection S v → u = v := by
   -- We need to show that if π_S(u) = π_S(v), then u = v
-  intro u v hu
+  intro proj_agree
 
   -- Prove by contradiction: assume u ≠ v and derive a contradiction
   by_contra hne
@@ -282,7 +285,11 @@ theorem projection_injective (C : Set (n → R)) (S : Set n) [Fintype S]
   -- Since u and v are distinct codewords, they differ in at least d = ‖C‖₀ positions
   have hdiff : hammingDist u v ≥ ‖C‖₀ := by {
     simp [codeDist]
-    sorry
+    refine Nat.sInf_le ?_
+    refine Set.mem_setOf.mpr ?_
+    use u
+    refine exists_and_left.mp ?_
+    use v
   }
 
   -- Let D be the set of positions where u and v differ
@@ -290,65 +297,67 @@ theorem projection_injective (C : Set (n → R)) (S : Set n) [Fintype S]
 
   -- -- The cardinality of D is the Hamming distance between u and v
   have hD : card D = hammingDist u v := by {
-     simp [hammingDist, hammingNorm, D]
-     sorry
+    simp
+    exact rfl
   }
 
   -- -- By our assumption, π_S(u) = π_S(v), so u and v agree on all positions in S
   have hagree : ∀ i ∈ S, u i = v i := by {
-     intros i hi
-     sorry
+    intros i hi
+    unfold projection at proj_agree
+    let i' : {x // x ∈ S} := ⟨i, hi⟩
+    have close: u i' = v i' := by {
+      apply congr_fun at proj_agree
+      apply proj_agree
+    }
+    exact close
   }
 
   -- -- This means D and S are disjoint
   have hdisjoint : D ∩ S = ∅ := by {
-    sorry
+    by_contra hinter
+    have hinter' : (D ∩ S).Nonempty := by {
+      exact Set.nonempty_iff_ne_empty.mpr hinter
+    }
+    apply Set.inter_nonempty.1 at hinter'
+    obtain ⟨x, hx_in_D, hx_in_S⟩ := hinter'
+    apply hagree at hx_in_S
+    contradiction
   }
 
-  --set_option diagnostics true in
-  let a := Fintype.elems (α := n)
-  let b := Set.toFinset S
-
-
+  let diff : Set n := {i : n | ¬i ∈ S}
+  let hdiff : Fintype diff := by {
+    exact ofFinite diff
+  }
 
   -- -- So D must be contained in the complement of S
-  have hsub : D ⊆ Fintype.elems (α := n) \ S  := by {
-    rw[Set.subset_diff]
-    refine ⟨?_, ?_⟩
-    let temp := Fintype.complete (α := n)
-    exact fun ⦃a⦄ a_1 ↦ temp a
-    exact Set.disjoint_iff_inter_eq_empty.mpr hdisjoint
+  have hsub : D ⊆ diff  := by {
+    unfold diff
+    refine Set.subset_setOf.mpr ?_
+    intro x hxd
+    solve_by_elim
   }
 
-
   -- But |D| ≥ d and |Sᶜ| = n - |S| = n - (n - (d-1)) = d-1
-  -- have hcard_compl :  = ‖C‖₀ - 1 := by {
-  --   rw [card_compl, hS],
-  --   simp,
-  -- },
+  have hcard_compl : card diff = ‖C‖₀ - 1 := by {
+    unfold diff
+    simp at *
+    rw[hS]
+    refine Nat.sub_sub_self ?_
+    have stronger :  ‖C‖₀ ≤ card n := by {
+      apply codeDist_le_card
+    }
+    omega
+  }
 
-  -- -- This is a contradiction: D cannot fit within Sᶜ
-  -- have : card D ≤ card (Sᶜ) := card_le_card hsub,
-  -- have : ‖C‖₀ ≤ ‖C‖₀ - 1 := by {
-  --   calc
-  --     ‖C‖₀ ≤ hammingDist u v := hdiff
-  --     ... = card D := by rw hD
-  --     ... ≤ card (Sᶜ) := card_le_card hsub
-  --     ... = ‖C‖₀ - 1 := hcard_compl
-  -- },
+  have hsizes: card D ≤ card diff := by {
+    exact Set.card_le_card hsub
+  }
 
-  -- -- This is clearly false since d ≥ 1 (otherwise C would be a singleton)
-  -- have : ‖C‖₀ > 0 := by {
-  --   apply pos_of_ne_zero,
-  --   intro h,
-  --   apply hne,
-  --   apply eq_of_lt_codeDist hu hv,
-  --   rw h,
-  --   apply hammingDist_pos,
-  --   exact hne,
-  -- },
+  rw[hcard_compl] at hsizes
+  rw[hD] at hsizes
 
-  -- exact Nat.lt_irrefl _ (lt_of_le_of_lt this (Nat.sub_lt _ _ this))
+  omega
 
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
