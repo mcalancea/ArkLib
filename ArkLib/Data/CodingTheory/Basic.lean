@@ -264,9 +264,96 @@ variable [Finite R]
 
 open Fintype
 
+def projection (S : Set n) (w : n → R) [Fintype S]: S → R :=
+  fun i => w i.val
+
+def projection2 (pred: n → Prop) (w : n → R) : {i : n | pred i} → R :=
+  fun i => w i.val
+
+theorem projection_injective (C : Set (n → R)) (S : Set n) [Fintype S]
+    (hS : card S = card n - (‖C‖₀ - 1)) :
+     Function.Injective (α := (n → R)) (β := (S → R)) (fun c => projection S c) := by
+  -- We need to show that if π_S(u) = π_S(v), then u = v
+  intro u v hu
+
+  -- Prove by contradiction: assume u ≠ v and derive a contradiction
+  by_contra hne
+
+  -- Since u and v are distinct codewords, they differ in at least d = ‖C‖₀ positions
+  have hdiff : hammingDist u v ≥ ‖C‖₀ := by {
+    simp [codeDist]
+    sorry
+  }
+
+  -- Let D be the set of positions where u and v differ
+  let D := {i : n | u i ≠ v i}
+
+  -- -- The cardinality of D is the Hamming distance between u and v
+  have hD : card D = hammingDist u v := by {
+     simp [hammingDist, hammingNorm, D]
+     sorry
+  }
+
+  -- -- By our assumption, π_S(u) = π_S(v), so u and v agree on all positions in S
+  have hagree : ∀ i ∈ S, u i = v i := by {
+     intros i hi
+     sorry
+  }
+
+  -- -- This means D and S are disjoint
+  have hdisjoint : D ∩ S = ∅ := by {
+    sorry
+  }
+
+  --set_option diagnostics true in
+  let a := Fintype.elems (α := n)
+  let b := Set.toFinset S
+
+
+
+  -- -- So D must be contained in the complement of S
+  have hsub : D ⊆ Fintype.elems (α := n) \ S  := by {
+    rw[Set.subset_diff]
+    refine ⟨?_, ?_⟩
+    let temp := Fintype.complete (α := n)
+    exact fun ⦃a⦄ a_1 ↦ temp a
+    exact Set.disjoint_iff_inter_eq_empty.mpr hdisjoint
+  }
+
+
+  -- But |D| ≥ d and |Sᶜ| = n - |S| = n - (n - (d-1)) = d-1
+  -- have hcard_compl :  = ‖C‖₀ - 1 := by {
+  --   rw [card_compl, hS],
+  --   simp,
+  -- },
+
+  -- -- This is a contradiction: D cannot fit within Sᶜ
+  -- have : card D ≤ card (Sᶜ) := card_le_card hsub,
+  -- have : ‖C‖₀ ≤ ‖C‖₀ - 1 := by {
+  --   calc
+  --     ‖C‖₀ ≤ hammingDist u v := hdiff
+  --     ... = card D := by rw hD
+  --     ... ≤ card (Sᶜ) := card_le_card hsub
+  --     ... = ‖C‖₀ - 1 := hcard_compl
+  -- },
+
+  -- -- This is clearly false since d ≥ 1 (otherwise C would be a singleton)
+  -- have : ‖C‖₀ > 0 := by {
+  --   apply pos_of_ne_zero,
+  --   intro h,
+  --   apply hne,
+  --   apply eq_of_lt_codeDist hu hv,
+  --   rw h,
+  --   apply hammingDist_pos,
+  --   exact hne,
+  -- },
+
+  -- exact Nat.lt_irrefl _ (lt_of_le_of_lt this (Nat.sub_lt _ _ this))
+
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
-    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) := sorry
+    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) :=
+    sorry
 
 variable [DivisionRing R]
 
