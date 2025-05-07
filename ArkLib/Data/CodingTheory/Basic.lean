@@ -360,6 +360,33 @@ theorem projection_injective
 
 
 
+lemma granular (k : ℕ) (hk: k ≤ card n) : exists S : Finset n, (card S) = k := by
+  induction k with
+  | zero =>
+    use ∅
+    simp
+  | succ k ih =>
+    have temp: ∃ S: Finset n, card S = k := by
+      apply ih
+      omega
+    obtain ⟨S, hS⟩ := temp
+
+    have temp2: ∃ x, ¬ x ∈ S := by
+      sorry
+
+    obtain ⟨x, hX⟩ := temp2
+
+    let S' := (Set.singleton x) ∪ (Finset.toSet S)
+    have temp3: (ofFinite S').card = card S + 1 := by
+      unfold S'
+      simp
+      have dis: Disjoint (Set.singleton x) S := by
+        sorry
+      let h:= @Finset.card_union_of_disjoint _ (Set.singleton x).toFin S dis
+    rw[hS] at temp3
+    use (ofFinite S').elems
+    simp [hS]
+
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
     (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) := by
@@ -367,17 +394,11 @@ theorem singleton_bound (C : Set (n → R)) :
   -- have fin_r : Fintype R := by
   --   exact ofFinite R
 
-  by_cases h : Subsingleton C
-  · sorry
-  · have non_triv: ‖C‖₀ ≥ 1 := by
+  by_cases non_triv : ‖C‖₀ ≥ 1
+  · have ax_proj: ∃ (S : Finset n), card S = card n - ‖C‖₀ + 1 := by
+      let elems := @Fintype.elems n _
+      let sample := elems.val
       sorry
-
-    have ax_proj: ∃ (S : Finset n), card S = card n - ‖C‖₀ + 1 := by
-      let elements := @Finset.elems n _
-      let elems := Finset.elems
-      let S := elems.take (card n - ‖C‖₀ + 1)
-      use S
-      simp
 
     obtain ⟨S, hS⟩ := ax_proj
     have dec_eq: DecidableEq S := by
@@ -430,7 +451,12 @@ theorem singleton_bound (C : Set (n → R)) :
     apply le_trans (b := @card C_proj' (ofFinite C_proj'))
     exact something2
     exact something1
-
+  · simp at non_triv
+    rw[non_triv]
+    simp
+    let huniv := @set_fintype_card_le_univ (n → R) (ofFinite (n → R)) C (ofFinite C)
+    -- let card_fun := @card_fun n R ?_ ?_ ?_
+    sorry
 variable [DivisionRing R]
 
 /-- **Singleton bound** for linear codes -/
