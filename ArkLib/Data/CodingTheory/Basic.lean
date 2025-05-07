@@ -272,8 +272,8 @@ theorem projection_injective
     (C : Set (n → R))
     (nontriv: ‖C‖₀ ≥ 1)
     (S : Finset n)
-    (hS : card S = card n - (‖C‖₀ - 1))
-    {u v : n → R}
+    (hS : card S = card n - ‖C‖₀ + 1)
+    (u v : n → R)
     (hu : u ∈ C)
     (hv : v ∈ C) : projection S u = projection S v → u = v := by
   -- We need to show that if π_S(u) = π_S(v), then u = v
@@ -343,7 +343,6 @@ theorem projection_injective
     unfold diff
     simp at *
     rw[hS]
-    refine Nat.sub_sub_self ?_
     have stronger :  ‖C‖₀ ≤ card n := by {
       apply codeDist_le_card
     }
@@ -359,10 +358,78 @@ theorem projection_injective
 
   omega
 
+
+
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
-    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) :=
-    sorry
+    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) := by
+
+  -- have fin_r : Fintype R := by
+  --   exact ofFinite R
+
+  by_cases h : Subsingleton C
+  · sorry
+  · have non_triv: ‖C‖₀ ≥ 1 := by
+      sorry
+
+    have ax_proj: ∃ (S : Finset n), card S = card n - ‖C‖₀ + 1 := by
+      let elements := @Finset.elems n _
+      let elems := Finset.elems
+      let S := elems.take (card n - ‖C‖₀ + 1)
+      use S
+      simp
+
+    obtain ⟨S, hS⟩ := ax_proj
+    have dec_eq: DecidableEq S := by
+      exact Classical.typeDecidableEq { x // x ∈ S }
+
+    let C_proj := {w | ∃ code ∈ C, projection S code = w}
+    let C_proj' := Set.image (projection S) C
+
+    -- have extra: Fintype C := by
+    --   exact ofFinite ↑C
+
+    -- have extra2: Fintype C_proj := by
+    --   exact ofFinite ↑C_proj
+
+    have temp : @card C_proj (ofFinite C_proj) = @card C_proj' (ofFinite C_proj') := by
+      exact rfl
+
+    have something1 : @card C_proj (ofFinite C_proj) ≤ @card R (ofFinite R) ^ (card n - ‖C‖₀ + 1) := by
+      let huniv := @set_fintype_card_le_univ (S → R) (ofFinite (S → R)) C_proj (ofFinite C_proj)
+
+      have fun_card_1: @card (S → R) ?_ = @card R (ofFinite R) ^ card S := by
+        let inst := @card_fun S R ?_ ?_ ?_
+        exact inst
+        exact dec_eq
+      sorry
+      -- --swap
+      -- -- exact ofFinite ({ x // x ∈ S } → R)
+      -- rw[fun_card_1] at huniv
+      -- rw[hS] at huniv
+      -- exact huniv
+
+
+    have something2: @card C (ofFinite C) ≤ @card C_proj' (ofFinite C_proj') := by
+      -- unfold C_proj'
+      -- refine @Fintype.card_le_of_injective ?_ ?_ ?_ ?_ (ofFinite C)  ?_ ?_
+      apply @Fintype.card_le_of_injective C C_proj' (ofFinite C) (ofFinite C_proj') ?f
+      swap
+      exact Set.imageFactorization (projection S) C
+      refine Set.imageFactorization_injective_iff.mpr ?_
+      intro u hu v hv heq
+
+      apply projection_injective (nontriv := non_triv) (S := S) (u := u) (v := v)
+      exact hS
+      exact hu
+      exact hv
+      exact heq
+
+    rw[←temp] at something2
+    rw[temp] at something1
+    apply le_trans (b := @card C_proj' (ofFinite C_proj'))
+    exact something2
+    exact something1
 
 variable [DivisionRing R]
 
