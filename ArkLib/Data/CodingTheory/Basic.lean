@@ -360,32 +360,29 @@ theorem projection_injective
 
 
 
-lemma granular (k : ℕ) (hk: k ≤ card n) : exists S : Finset n, (card S) = k := by
-  induction k with
-  | zero =>
-    use ∅
-    simp
-  | succ k ih =>
-    have temp: ∃ S: Finset n, card S = k := by
-      apply ih
-      omega
-    obtain ⟨S, hS⟩ := temp
+-- lemma granular (k : ℕ) (hk: k ≤ card n) : exists S : Finset n, (card S) = k := by
+--   induction k with
+--   | zero =>
+--     use ∅
+--     simp
+--   | succ k ih =>
+--     have temp: ∃ S: Finset n, card S = k := by
+--       apply ih
+--       omega
+--     obtain ⟨S, hS⟩ := temp
 
-    have temp2: ∃ x, ¬ x ∈ S := by
-      sorry
+--     have temp2: ∃ x, ¬ x ∈ S := by
+--       by_contra h
+--       push_neg at h
 
-    obtain ⟨x, hX⟩ := temp2
 
-    let S' := (Set.singleton x) ∪ (Finset.toSet S)
-    have temp3: (ofFinite S').card = card S + 1 := by
-      unfold S'
-      simp
-      have dis: Disjoint (Set.singleton x) S := by
-        sorry
-      let h:= @Finset.card_union_of_disjoint _ (Set.singleton x).toFin S dis
-    rw[hS] at temp3
-    use (ofFinite S').elems
-    simp [hS]
+--     obtain ⟨x, hX⟩ := temp2
+
+--     let S' := @Set.toFinset n ((Set.singleton x) ∪ (Finset.toSet S)) ?_
+--     use S'
+--     unfold S'
+--     simp
+--     let card_un := Finset.card_union_of_disjoint
 
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
@@ -396,8 +393,6 @@ theorem singleton_bound (C : Set (n → R)) :
 
   by_cases non_triv : ‖C‖₀ ≥ 1
   · have ax_proj: ∃ (S : Finset n), card S = card n - ‖C‖₀ + 1 := by
-      let elems := @Fintype.elems n _
-      let sample := elems.val
       sorry
 
     obtain ⟨S, hS⟩ := ax_proj
@@ -420,16 +415,15 @@ theorem singleton_bound (C : Set (n → R)) :
       let huniv := @set_fintype_card_le_univ (S → R) (ofFinite (S → R)) C_proj (ofFinite C_proj)
 
       have fun_card_1: @card (S → R) ?_ = @card R (ofFinite R) ^ card S := by
-        let inst := @card_fun S R ?_ ?_ ?_
-        exact inst
-        exact dec_eq
-      sorry
+        let inst := @card_fun S R dec_eq (ofFinite S) (ofFinite R)
+        -- exact inst
+        -- exact dec_eq
+        sorry
       -- --swap
       -- -- exact ofFinite ({ x // x ∈ S } → R)
       -- rw[fun_card_1] at huniv
       -- rw[hS] at huniv
       -- exact huniv
-
 
     have something2: @card C (ofFinite C) ≤ @card C_proj' (ofFinite C_proj') := by
       -- unfold C_proj'
@@ -455,7 +449,12 @@ theorem singleton_bound (C : Set (n → R)) :
     rw[non_triv]
     simp
     let huniv := @set_fintype_card_le_univ (n → R) (ofFinite (n → R)) C (ofFinite C)
-    -- let card_fun := @card_fun n R ?_ ?_ ?_
+
+    have dec_eq: DecidableEq n := by
+      exact Classical.typeDecidableEq n
+
+    let card_fun := @card_fun n R ?_ (ofFinite n) (ofFinite R)
+    sorry
     sorry
 variable [DivisionRing R]
 
