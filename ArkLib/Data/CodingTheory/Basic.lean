@@ -269,7 +269,7 @@ def projection (S : Finset n) (w : n → R) : S → R :=
   fun i => w i.val
 
 
-theorem projection_injective
+omit [Finite R] in theorem projection_injective
     (C : Set (n → R))
     (nontriv: ‖C‖₀ ≥ 1)
     (S : Finset n)
@@ -356,7 +356,6 @@ theorem projection_injective
 
   rw[hcard_compl] at hsizes
   rw[hD] at hsizes
-
   omega
 
 
@@ -368,10 +367,8 @@ theorem projection_injective
   := by
     induction k with
   | zero =>
-    -- Base case: k = 0
     exists ∅
   | succ k' ih =>
-    -- Inductive step: assuming the result for k', prove it for k'+1
     have ⟨S', hS'⟩ := ih (Nat.le_of_succ_le hk)
 
     have new_element: ∃ x: n, ¬ x ∈ S' := by
@@ -417,7 +414,8 @@ theorem singleton_bound (C : Set (n → R)) :
     have temp : @card C_proj (ofFinite C_proj) = @card C_proj' (ofFinite C_proj') := by
       exact rfl
 
-    have something1 : @card C_proj (ofFinite C_proj) ≤ @card R (ofFinite R) ^ (card n - (‖C‖₀ - 1)) := by
+    have something1 :
+    @card C_proj (ofFinite C_proj) ≤ @card R (ofFinite R) ^ (card n - (‖C‖₀ - 1)) := by
       let card_fun := @card_fun S R (Classical.typeDecidableEq S) _ (ofFinite R)
       rw[hS] at card_fun
       rw[←card_fun]
@@ -433,10 +431,9 @@ theorem singleton_bound (C : Set (n → R)) :
       intro u hu v hv heq
 
       apply projection_injective (nontriv := non_triv) (S := S) (u := u) (v := v)
-      exact hS
-      exact hu
-      exact hv
-      exact heq
+      all_goals {
+        assumption
+      }
 
     rw[←temp] at something2
     rw[temp] at something1
@@ -452,7 +449,6 @@ theorem singleton_bound (C : Set (n → R)) :
 
     let huniv := @set_fintype_card_le_univ (n → R) ?_ C (ofFinite C)
     exact huniv
-
 
 variable [DivisionRing R]
 
