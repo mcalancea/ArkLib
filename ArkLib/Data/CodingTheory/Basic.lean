@@ -9,6 +9,7 @@ import Mathlib.LinearAlgebra.Lagrange
 import Mathlib.Data.Set.Finite.Lattice
 import Mathlib.Topology.MetricSpace.Infsep
 import Mathlib.Data.ENat.Lattice
+import Mathlib.Data.Finset.Basic
 
 /-!
   # Basics of Coding Theory
@@ -272,7 +273,7 @@ theorem projection_injective
     (C : Set (n → R))
     (nontriv: ‖C‖₀ ≥ 1)
     (S : Finset n)
-    (hS : card S = card n - ‖C‖₀ + 1)
+    (hS : card S = card n - (‖C‖₀ - 1))
     (u v : n → R)
     (hu : u ∈ C)
     (hv : v ∈ C) : projection S u = projection S v → u = v := by
@@ -360,40 +361,51 @@ theorem projection_injective
 
 
 
--- lemma granular (k : ℕ) (hk: k ≤ card n) : exists S : Finset n, (card S) = k := by
---   induction k with
---   | zero =>
---     use ∅
---     simp
---   | succ k ih =>
---     have temp: ∃ S: Finset n, card S = k := by
---       apply ih
---       omega
---     obtain ⟨S, hS⟩ := temp
+ lemma finset_of_fintype_card_continuous
+  (k : ℕ)
+  (hk: k ≤ card n) :
+  exists S : Finset n, (card S) = k
+  := by
+    induction k with
+  | zero =>
+    -- Base case: k = 0
+    exists ∅
+  | succ k' ih =>
+    -- Inductive step: assuming the result for k', prove it for k'+1
+    have ⟨S', hS'⟩ := ih (Nat.le_of_succ_le hk)
 
---     have temp2: ∃ x, ¬ x ∈ S := by
---       by_contra h
---       push_neg at h
+    have new_element: ∃ x: n, ¬ x ∈ S' := by
+      by_contra hcomplete
+      push_neg at hcomplete
+      have fits: @Fintype.elems n _ ⊆ S' := by
+        exact fun ⦃a⦄ a_1 ↦ hcomplete a
+      have card_ge_n : card n ≤ card S' := by
+        simp
+        refine Finset.le_card_iff_exists_subset_card.mpr ?_
+        exists @Fintype.elems n _
+      omega
+
+    obtain ⟨x, hx⟩ := new_element
+
+    let S: Finset n := @insert _ _ ( @Finset.instInsert _ (Classical.typeDecidableEq n)) x S'
+    use S
+    unfold S
+    rw[←hS']
+    simp
+    apply @Finset.card_insert_of_not_mem n S' x (Classical.typeDecidableEq n) hx
 
 
---     obtain ⟨x, hX⟩ := temp2
-
---     let S' := @Set.toFinset n ((Set.singleton x) ∪ (Finset.toSet S)) ?_
---     use S'
---     unfold S'
---     simp
---     let card_un := Finset.card_union_of_disjoint
 
 /-- **Singleton bound** for arbitrary codes -/
 theorem singleton_bound (C : Set (n → R)) :
-    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - ‖C‖₀ + 1) := by
-
-  -- have fin_r : Fintype R := by
-  --   exact ofFinite R
+    (ofFinite C).card ≤ (ofFinite R).card ^ (card n - (‖C‖₀ - 1)) := by
 
   by_cases non_triv : ‖C‖₀ ≥ 1
-  · have ax_proj: ∃ (S : Finset n), card S = card n - ‖C‖₀ + 1 := by
-      sorry
+  · have ax_proj: ∃ (S : Finset n), card S = card n - (‖C‖₀ - 1) := by
+      let cont := @finset_of_fintype_card_continuous n ?_ (card n - (‖C‖₀ - 1)) ?_
+      apply cont
+      assumption
+      omega
 
     obtain ⟨S, hS⟩ := ax_proj
     have dec_eq: DecidableEq S := by
@@ -402,32 +414,18 @@ theorem singleton_bound (C : Set (n → R)) :
     let C_proj := {w | ∃ code ∈ C, projection S code = w}
     let C_proj' := Set.image (projection S) C
 
-    -- have extra: Fintype C := by
-    --   exact ofFinite ↑C
-
-    -- have extra2: Fintype C_proj := by
-    --   exact ofFinite ↑C_proj
-
     have temp : @card C_proj (ofFinite C_proj) = @card C_proj' (ofFinite C_proj') := by
       exact rfl
 
-    have something1 : @card C_proj (ofFinite C_proj) ≤ @card R (ofFinite R) ^ (card n - ‖C‖₀ + 1) := by
-      let huniv := @set_fintype_card_le_univ (S → R) (ofFinite (S → R)) C_proj (ofFinite C_proj)
+    have something1 : @card C_proj (ofFinite C_proj) ≤ @card R (ofFinite R) ^ (card n - (‖C‖₀ - 1)) := by
+      let card_fun := @card_fun S R (Classical.typeDecidableEq S) _ (ofFinite R)
+      rw[hS] at card_fun
+      rw[←card_fun]
 
-      have fun_card_1: @card (S → R) ?_ = @card R (ofFinite R) ^ card S := by
-        let inst := @card_fun S R dec_eq (ofFinite S) (ofFinite R)
-        -- exact inst
-        -- exact dec_eq
-        sorry
-      -- --swap
-      -- -- exact ofFinite ({ x // x ∈ S } → R)
-      -- rw[fun_card_1] at huniv
-      -- rw[hS] at huniv
-      -- exact huniv
+      let huniv := @set_fintype_card_le_univ (S → R) ?_ C_proj (ofFinite C_proj)
+      exact huniv
 
     have something2: @card C (ofFinite C) ≤ @card C_proj' (ofFinite C_proj') := by
-      -- unfold C_proj'
-      -- refine @Fintype.card_le_of_injective ?_ ?_ ?_ ?_ (ofFinite C)  ?_ ?_
       apply @Fintype.card_le_of_injective C C_proj' (ofFinite C) (ofFinite C_proj') ?f
       swap
       exact Set.imageFactorization (projection S) C
@@ -448,14 +446,14 @@ theorem singleton_bound (C : Set (n → R)) :
   · simp at non_triv
     rw[non_triv]
     simp
-    let huniv := @set_fintype_card_le_univ (n → R) (ofFinite (n → R)) C (ofFinite C)
 
-    have dec_eq: DecidableEq n := by
-      exact Classical.typeDecidableEq n
+    let card_fun := @card_fun n R (Classical.typeDecidableEq n) _ (ofFinite R)
+    rw[←card_fun]
 
-    let card_fun := @card_fun n R ?_ (ofFinite n) (ofFinite R)
-    sorry
-    sorry
+    let huniv := @set_fintype_card_le_univ (n → R) ?_ C (ofFinite C)
+    exact huniv
+
+
 variable [DivisionRing R]
 
 /-- **Singleton bound** for linear codes -/
