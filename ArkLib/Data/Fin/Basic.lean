@@ -1,20 +1,45 @@
 /-
-Copyright (c) 2024 ArkLib Contributors. All rights reserved.
+Copyright (c) 2024-2025 ArkLib Contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Quang Dao
+Authors: Quang Dao, František Silváši
 -/
-import Mathlib.Data.Matrix.Reflection
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Ring.Nat
+import Mathlib.Algebra.Order.Sub.Basic
+import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Data.Fin.Tuple.Take
-import Mathlib.Logic.Lemmas
-import SEq.Tactic.DepRewrite
+import Batteries.Data.Fin.Fold
+import ArkLib.Data.Math.DepCast
 
 /-!
-  # Lemmas on `n`-tuples
+  # Lemmas on `Fin` and `Fin`-indexed tuples
 
-  We define operations on (dependent) finite vectors that are needed
-  for composing interactive (oracle) protocols.
+  We define operations on `Fin` and `Fin`-indexed tuples that are needed for ArkLib.
 -/
+
 universe u v w
+
+-- We may need special naming for these objects `FinTuple` and `FinVec`
+-- in order to consolidate a pattern that we find in this development
+-- i.e. `ProtocolSpec` is a `FinVec`, `(Full)Transcript` is a `FinTuple`, and so on
+
+/-- A `FinVec` is a `FinTuple` with a constant type family, i.e. `Fin n → α`. -/
+abbrev FinVec (α : Sort u) (n : ℕ) : Sort _ := Fin n → α
+
+def IndexedByFinVec (α : Sort u) (n : ℕ) := (β : FinVec α n) → Type v
+
+/-- A `FinTuple` of size `n` and type family `α` is a dependent function `(i : Fin n) → α i`. -/
+abbrev FinTuple (n : ℕ) (α : FinVec (Sort u) n) : Sort _ := (i : Fin n) → α i
+
+/-- Cast a `FinTuple` across an equality `n' = n` and a family of equalities
+  `∀ i, α (Fin.cast h i) = α' i`.
+
+  Since this is a pull-back, we state the equalities in the other direction (i.e. `n' = n` instead
+  of `n = n'`) -/
+def FinTuple.cast {n n' : ℕ} {α : Fin n → Sort u} {α' : Fin n' → Sort u}
+    (h : n' = n) (hα : ∀ i, α (Fin.cast h i) = α' i) (v : FinTuple n α) :
+      FinTuple n' α' :=
+  fun i => _root_.cast (hα i) (v (Fin.cast h i))
 
 /-- Version of `funext_iff` for dependent functions `f : (x : α) → β x` and
 `g : (x : α') → β' x`. -/
@@ -165,39 +190,60 @@ theorem insertNth_zero_eq_cases {n : ℕ} {α : Fin (n + 1) → Sort u} :
     simp only [insertNth, succAboveCases, not_lt_zero, ↓reduceDIte, cases_succ, Fin.succ_ne_zero]
     congr
 
-theorem append_comp {m n : ℕ} {α β : Sort*} {a : Fin m → α} {b : Fin n → α} (f : α → β) :
+section Append
+
+variable {m n : ℕ} {α β : Sort*}
+
+theorem append_comp {a : Fin m → α} {b : Fin n → α} (f : α → β) :
     append (f ∘ a) (f ∘ b) = f ∘ append a b := by
   funext i
   simp only [append, addCases, comp_apply, eq_rec_constant]
   by_cases h : i < m <;> simp only [h, ↓reduceDIte]
 
-theorem append_comp' {m n : ℕ} {α β : Sort*} {a : Fin m → α} {b : Fin n → α} (f : α → β)
+theorem append_comp' {a : Fin m → α} {b : Fin n → α} (f : α → β)
     (i : Fin (m + n)) : append (f ∘ a) (f ∘ b) i = f (append a b i) := by
   simp only [append_comp, comp_apply]
 
-theorem addCases_left' {m n : ℕ} {motive : Fin (m + n) → Sort*}
+theorem addCases_left' {motive : Fin (m + n) → Sort*}
     {left : (i : Fin m) → motive (castAdd n i)} {right : (j : Fin n) → motive (natAdd m j)}
     {i : Fin m} (j : Fin (m + n)) (h : j = castAdd n i) :
       addCases (motive := motive) left right j = h ▸ (left i) := by
   subst h
   simp only [addCases_left]
 
-theorem addCases_right' {m n : ℕ} {motive : Fin (m + n) → Sort*}
+theorem addCases_right' {motive : Fin (m + n) → Sort*}
     {left : (i : Fin m) → motive (castAdd n i)} {right : (j : Fin n) → motive (natAdd m j)}
     {i : Fin n} (j : Fin (m + n)) (h : j = natAdd m i) :
       addCases (motive := motive) left right j = h ▸ (right i) := by
   subst h
   simp only [addCases_right]
 
-theorem append_left' {m n : ℕ} {α : Sort*} {u : Fin m → α} {v : Fin n → α} {i : Fin m}
+theorem append_left' {u : Fin m → α} {v : Fin n → α} {i : Fin m}
     (j : Fin (m + n)) (h : j = castAdd n i) : append u v j = u i := by
   subst h
   simp only [append_left]
 
-theorem append_right' {m n : ℕ} {α : Sort*} {u : Fin m → α} {v : Fin n → α} {i : Fin n}
+theorem append_right' {u : Fin m → α} {v : Fin n → α} {i : Fin n}
     (j : Fin (m + n)) (h : j = natAdd m i) : append u v j = v i := by
   subst h
   simp only [append_right]
+
+theorem append_left_injective (b : Fin n → α) : Function.Injective (@Fin.append m n α · b) := by
+  intro a a' h
+  simp only at h
+  ext i
+  have : append a b (castAdd n i) = append a' b (castAdd n i) := by rw [h]
+  simp only [append_left] at this
+  exact this
+
+theorem append_right_injective (a : Fin m → α) : Function.Injective (@Fin.append m n α a) := by
+  intro b b' h
+  ext i
+  have : append a b (natAdd m i) = append a b' (natAdd m i) := by rw [h]
+  simp only [append_right] at this
+  exact this
+
+end Append
 
 /-- Version of `Fin.addCases` that splits the motive into two dependent vectors `α` and `β`, and
   the return type is `Fin.append α β`. -/
@@ -323,7 +369,9 @@ theorem drop_of_succ {α : Fin (n + 1) → Sort*} (v : (i : Fin (n + 1)) → α 
 -- @[simp]
 -- theorem drop_all (v : (i : Fin n) → α i) :
 --     HEq (drop n (le_refl n) v)
---       (fun (i : Fin 0) ↦ @elim0 (α (Fin.cast (Nat.sub_add_cancel (le_refl n)) (i.addNat n))) i) := by
+--       (fun (i : Fin 0) ↦
+-- @elim0 (α (Fin.cast (Nat.sub_add_cancel (le_refl n)) (i.addNat n))) i) := by
+--   sorry
 --   refine (Fin.heq_fun_iff ?_).mpr ?_
 --   · simp
 --   · intro i
@@ -451,8 +499,11 @@ def modSum {m : ℕ} {n : Fin m → ℕ} (k : Fin (∑ j, n j)) : Fin (n (divSum
     exact hk⟩
 
 open Finset in
-/-- Equivalence between `(i : Fin m) × Fin (n i)` and `Fin (∑ i, n i)`. -/
-def finSigmaFinEquiv {m : ℕ} {n : Fin m → ℕ} : (i : Fin m) × Fin (n i) ≃ Fin (∑ i, n i) :=
+/-- Equivalence between `(i : Fin m) × Fin (n i)` and `Fin (∑ i, n i)`.
+
+Put this as the prime version since it already exists in mathlib (though with a different definition
+that's not def'eq to this one). -/
+def finSigmaFinEquiv' {m : ℕ} {n : Fin m → ℕ} : (i : Fin m) × Fin (n i) ≃ Fin (∑ i, n i) :=
   .ofRightInverseOfCardLE (le_of_eq <| by simp_rw [Fintype.card_sigma, Fintype.card_fin])
     (fun ⟨i, j⟩ => ⟨∑ k, n (Fin.castLE i.isLt.le k) + j, by
       have hi : i.val + 1 + (m - i.val - 1) = m := by omega
@@ -475,14 +526,15 @@ def finSigmaFinEquiv {m : ℕ} {n : Fin m → ℕ} : (i : Fin m) × Fin (n i) �
         exact Nat.add_sub_cancel' (Fin.sum_le_of_divSum?_eq_some (Option.some_get _).symm))
 
 @[simp]
-theorem finSigmaFinEquiv_apply {m : ℕ} {n : Fin m → ℕ} (k : (i : Fin m) × Fin (n i)) :
-    (finSigmaFinEquiv k : ℕ) = ∑ i : Fin k.1, n (Fin.castLE k.1.isLt.le i) + k.2 := rfl
+theorem finSigmaFinEquiv'_apply {m : ℕ} {n : Fin m → ℕ} (k : (i : Fin m) × Fin (n i)) :
+    (finSigmaFinEquiv' k : ℕ) = ∑ i : Fin k.1, n (Fin.castLE k.1.isLt.le i) + k.2 := rfl
 
-theorem finSigmaFinEquiv_pair {m : ℕ} {n : Fin m → ℕ} (i : Fin m) (k : Fin (n i)) :
-    (finSigmaFinEquiv ⟨i, k⟩ : ℕ) = ∑ j, n (Fin.castLE i.isLt.le j) + k := by
-  simp only [finSigmaFinEquiv, ↓reduceDIte, Equiv.ofRightInverseOfCardLE_apply]
+theorem finSigmaFinEquiv'_pair {m : ℕ} {n : Fin m → ℕ} (i : Fin m) (k : Fin (n i)) :
+    (finSigmaFinEquiv' ⟨i, k⟩ : ℕ) = ∑ j, n (Fin.castLE i.isLt.le j) + k := by
+  simp only [finSigmaFinEquiv', ↓reduceDIte, Equiv.ofRightInverseOfCardLE_apply]
 
 end FinSigmaFinEquiv
+
 section Join
 
 variable {a : Fin n → ℕ} {α : (i : Fin n) → (j : Fin (a i)) → Sort*}
@@ -490,9 +542,18 @@ variable {a : Fin n → ℕ} {α : (i : Fin n) → (j : Fin (a i)) → Sort*}
 def join (v : (i : Fin n) → (j : Fin (a i)) → α i j) (k : Fin (∑ i, a i)) : α k.divSum k.modSum :=
   v k.divSum k.modSum
 
-#check List.join_join
+variable {v : (i : Fin n) → (j : Fin (a i)) → α i j}
 
-#check List.join_append
+@[simp]
+theorem join_zero {a : Fin 0 → ℕ} {α : (i : Fin 0) → (j : Fin (a i)) → Sort*}
+    {v : (i : Fin 0) → (j : Fin (a i)) → α i j} :
+    join v = fun i => Fin.elim0 i := by
+  funext i; exact Fin.elim0 i
+
+-- theorem join_one {a : Fin 1 → ℕ} {α : (i : Fin 1) → (j : Fin (a i)) → Sort*}
+--     {v : (i : Fin 1) → (j : Fin (a i)) → α i j} :
+--     join v = v 0 := by
+--   funext i; exact Fin.elim0 i
 
 theorem join_addCases : True := sorry
 
@@ -502,14 +563,10 @@ theorem join_eq_join_list : True := sorry
 
 end Join
 
-end Fin
-
 section OptionEquivPrime
 
 -- Experimenting with `Fin n` instead of `Fin (n + 1)`, but it seems we'd need to re-define every
 -- existing `Fin` functions, which is bad
-
-#check finSuccEquiv'
 
 variable {n : ℕ}
 
@@ -519,68 +576,176 @@ def finSuccEquivNth' (i : Fin n) : Fin n ≃ Option (Fin (n - 1)) := by
 
 end OptionEquivPrime
 
-namespace List
+section Fold
 
--- TODO: put this elsewhere (for some reason `@[to_additive]` doesn't work)
-def partialSum {α : Type*} [AddMonoid α] (l : List α) : List α :=
-  [0] ++ match l with
-  | [] => []
-  | a :: l' => (partialSum l').map (a + ·)
+/-- Congruence for `dfoldl` -/
+theorem dfoldl_congr {n : ℕ}
+    {α α' : Fin (n + 1) → Type u}
+    {f : (i : Fin n) → α i.castSucc → α i.succ}
+    {f' : (i : Fin n) → α' i.castSucc → α' i.succ}
+    {init : α 0} {init' : α' 0}
+    (hα : ∀ i, α i = α' i)
+    (hf : ∀ i a, f i a = (cast (hα _).symm (f' i (cast (hα _) a))))
+    (hinit : init = cast (hα 0).symm init') :
+      dfoldl n α f init = cast (hα (last n)).symm (dfoldl n α' f' init') := by
+  have hα' : α = α' := funext hα
+  subst hα'
+  simp_all only [cast_eq]
+  have hf' : f = f' := funext₂ hf
+  subst hf'
+  subst hinit
+  rfl
 
-@[to_additive existing]
-def partialProd {α : Type*} [Monoid α] (l : List α) : List α :=
-  [1] ++ match l with
-  | [] => []
-  | a :: l' => (partialProd l').map (a * ·)
+/-- Congruence for `dfoldl` whose type vectors are indexed by `ι` and have a `DepCast` instance
+
+Note that we put `cast` (instead of `dcast`) in the theorem statement for easier matching,
+but `dcast` inside the hypotheses for downstream proving. -/
+theorem dfoldl_congr_dcast {n : ℕ}
+    {ι : Type v} {α α' : Fin (n + 1) → ι} {β : ι → Type u} [DepCast ι β]
+    {f : (i : Fin n) → β (α i.castSucc) → β (α i.succ)}
+    {f' : (i : Fin n) → β (α' i.castSucc) → β (α' i.succ)}
+    {init : β (α 0)} {init' : β (α' 0)}
+    (hα : ∀ i, α i = α' i)
+    (hf : ∀ i a, f i a = (dcast (hα _).symm (f' i (dcast (hα _) a))))
+    (hinit : init = dcast (hα 0).symm init') :
+      dfoldl n (fun i => β (α i)) f init =
+        cast (by have := funext hα; subst this; simp) (dfoldl n (fun i => β (α' i)) f' init') := by
+  have hα' : α = α' := funext hα
+  cases hα'
+  simp_all [dcast_id, comp_apply]
+  simp at hf
+  have hf' : f = f' := funext₂ hf
+  cases hf'
+  cases hinit
+  rfl
+
+/-- Distribute `dcast` inside `dfoldl`. Requires the minimal condition of `α = α'` -/
+theorem dfoldl_dcast {ι : Type v} {β : ι → Type u} [DepCast ι β]
+    {n : ℕ} {α α' : Fin (n + 1) → ι}
+    {f : (i : Fin n) → β (α i.castSucc) → β (α i.succ)} {init : β (α 0)}
+    (hα : ∀ i, α i = α' i) :
+      dcast (hα (last n)) (dfoldl n (fun i => β (α i)) f init) =
+        dfoldl n (fun i => β (α' i))
+          (fun i a => dcast (hα _) (f i (dcast (hα _).symm a))) (dcast (hα 0) init) := by
+  have hα' : α = α' := funext hα
+  subst hα'
+  simp_all [dcast_id, comp_apply]
+
+-- theorem dfoldl_dcast₂ {n : ℕ}
+--     {ι₁ : Type v} {ι₂ : ι₁ → Type w} {α α' : Fin (n + 1) → (i : ι₁) → ι₂ i}
+--     {β : (i : ι₁) → ι₂ i → Type u}
+--     {f : (i : Fin n) → β (α i.castSucc) → β (α i.succ) (ι₂ (α i.succ))}
+--     {f' : (i : Fin n) → β (α' i.castSucc) → β (α' i.succ)}
+--     {init : β (α 0)} {init' : β (α' 0)}
+--     (hα : ∀ i, α i = α' i)
+--     (hf : ∀ i a, f i a = (cast (congrArg β (hα _)).symm (f' i (cast (congrArg β (hα _)) a))))
+--     (hinit : init = cast (congrArg β (hα 0).symm) init') :
+--       dfoldl n (β ∘ α) f init =
+--         cast (congrArg β (hα (last n)).symm) (dfoldl n (β ∘ α') f' init') := by
+--   have hα' : α = α' := funext hα
+--   subst hα'
+--   simp_all
+--   have hf' : f = f' := funext₂ hf
+--   subst hf'
+--   subst hinit
+--   rfl
+
+end Fold
+
+section Lift
+
+variable {α : Type*}
+         {m n : ℕ}
+
+/-
+  Basic ad-hoc lifting;
+  - `liftF : (Fin n → α) → ℕ → α`
+  - `liftF` : (ℕ → α) → Fin n → α
+  These invert each other assuming appropriately-bounded domains.
+
+  These are specialised versions of true lifts that uses `Nonempty` / `Inhabited`
+  and take the complement of the finite set which is the domain of the function being lifted.
+-/
+
+variable [Zero α] {f : ℕ → α} {f' : Fin n → α}
+
+/--
+  `liftF` lifts functions over domains `Fin n` to functions over domains `ℕ`
+  by returning `0` on points `≥ n`.
+-/
+def liftF (f : Fin n → α) : ℕ → α :=
+  fun m ↦ if h : m < n then f ⟨m, h⟩ else 0
+
+/--
+  `liftF'` lifts functions over domains `ℕ` to functions over domains `Fin n`
+  by taking the obvious injection.
+-/
+def liftF' (f : ℕ → α) : Fin n → α :=
+  fun m ↦ f m.1
+
+open Fin (liftF' liftF)
 
 @[simp]
-theorem partialSum_nil : [].partialSum = [0] := rfl
+lemma liftF_succ {f : Fin (n + 1) → α} : liftF f n = f ⟨n, Nat.lt_add_one _⟩ := by
+  aesop (add simp liftF)
 
-variable {α : Type*} [AddMonoid α]
-
-@[simp]
-theorem partialSum_succ {a : α} {l : List α} :
-    (a :: l).partialSum = [0] ++ (partialSum l).map (a + ·) := rfl
-
-variable [Preorder α] [DecidableRel ((· < ·) : α → α → Prop)]
-
--- Pinpoint the first element in the list whose partial sum up to that point is more than `j`
-def findSum (l : List α) (j : α) : Option α := l.partialSum.find? (j < ·)
-
--- TODO: extend theorems to more general types than just `ℕ`
-
-theorem findSum_of_le_sum {l : List ℕ} {j : ℕ} (h : j < l.sum) : ∃ n, findSum l j = some n := by
-  match l with
-  | [] => simp only [sum_nil, not_lt_zero'] at h ⊢
-  | a :: l' =>
-    simp at h
-    sorry
-    -- by_cases h' : j < a
-    -- · use a
-    --   simp [findSum, h', findSome?_cons]
-    -- · simp [findSum, h'] at h
-    --   specialize @findSum_of_le_sum l' (j - a)
-    --   simp at h
-
--- Pinpoint the first index in the list whose partial sum is more than `j`
-def findSumIdx (l : List α) (j : α) : ℕ := l.partialSum.findIdx (j < ·)
-
--- Variant of `findSumIdx` with bounds
-def findSumIdx' (l : List ℕ) (j : Fin l.sum) : Fin l.length := ⟨findSumIdx l j, sorry⟩
-
-def findSumIdxWith (l : List ℕ) (j : Fin l.sum) : (i : Fin l.length) × Fin (l.get i) := sorry
+lemma liftF'_liftF_of_lt {k : Fin m} (h : k < n) :
+  liftF' (n := m) (liftF (n := n) f') k = f' ⟨k, by omega⟩ := by
+  aesop (add simp [liftF, liftF'])
 
 @[simp]
-theorem ranges_length_eq_self_length {l : List ℕ} : l.ranges.length = l.length := by
-  induction l with
-  | nil => simp only [List.ranges, List.length_nil]
-  | cons n l' ih => simp only [List.ranges, List.length_cons, List.length_map, ih]
+lemma liftF'_liftF_succ {f : Fin (n + 1) → α} {x : Fin n} :
+  liftF' (liftF (n := n + 1) f) x = f x.castSucc := by
+  aesop (add simp [liftF, liftF']) (add safe (by omega))
 
 @[simp]
-theorem ranges_nil : List.ranges [] = [] := rfl
+lemma liftF'_liftF : Function.LeftInverse liftF' (liftF (α := α) (n := n)) := by
+  aesop (add simp [Function.LeftInverse, liftF, liftF'])
+
+lemma liftF_liftF'_of_lt (h : m < n) : liftF (liftF' (n := n) f) m = f m := by
+  aesop (add simp liftF)
 
 @[simp]
-theorem ranges_succ {a : ℕ} {l : List ℕ} :
-    List.ranges (a :: l) = range a :: l.ranges.map (map (a + ·)) := rfl
+lemma liftF_liftF'_succ : liftF (liftF' (n := n + 1) f) n = f n := by
+  aesop (add simp liftF)
 
-end List
+lemma liftF_eval {f : Fin n → α} {i : Fin n} :
+  liftF f i.val = f i := by
+  aesop (add simp liftF)
+
+lemma liftF_ne_0 {f : Fin n → α} {i : ℕ}
+  (h : liftF f i ≠ 0)
+  : i < n := by
+  aesop (add simp liftF)
+
+@[simp]
+lemma liftF_0_eq_0
+  : liftF (fun (_ : Fin n) ↦ (0 : α)) = (fun _ ↦ (0 : α)) := by
+  aesop (add simp liftF)
+
+@[simp]
+lemma liftF'_0_eq_0
+  : liftF' (fun _ ↦ (0 : α)) = (fun (_ : Fin n) ↦ (0 : α)) := by
+  aesop (add simp liftF')
+
+abbrev contract (m : ℕ) (f : Fin n → α) := liftF (liftF' (n := m) (liftF f))
+
+open Fin (contract)
+
+lemma contract_eq_liftF_of_lt {k : ℕ} (h₁ : k < m) :
+  contract m f' k = liftF f' k := by
+  aesop (add simp [contract, liftF, liftF'])
+
+attribute [simp] contract.eq_def
+
+variable {F : Type} [Field F] {p : Polynomial F}
+
+open Polynomial
+
+lemma eval_liftF_of_lt {f : Fin m → F} (h : n < m) :
+  eval (liftF f n) p = eval (f ⟨n, h⟩) p := by
+  aesop (add simp liftF)
+
+end Lift
+
+end Fin

@@ -24,7 +24,7 @@ The core of our library is a mechanized theory of **$$\mathcal{F}$$-Interactive 
 
 Using the theory of $$\mathcal{F}$$-IOR, we then formalize various proof systems in [ProofSystem](ArkLib/ProofSystem).
 
-## Active Formalizations (last updated: April 30th 20205)
+## Active Formalizations (last updated: 22 May 2025)
 
 The library is currently in development. Alongside general development of the library's underlying theory, the following cryptographic components are actively being worked on:
 - The sumcheck protocol
